@@ -39,4 +39,4 @@ brandSchema.pre('save',async function (next) {
     }
     next()
 })
-export const Brand = model<TBrand>('brand', brandSchema);
+export const Brand = model<TBrand>('Brand', brandSchema);

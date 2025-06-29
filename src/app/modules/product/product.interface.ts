@@ -1,17 +1,17 @@
+import { Types } from "mongoose";
+
 export type TProduct = {
-  _id?: string;
   name: string;
-  brand: string;
-  category: string; // ObjectId as string (referencing Category)
+  brand: Types.ObjectId;
+  category:  Types.ObjectId; 
   description?: string;
   price: number;
-  discountPrice?: number;
+  discountPrice?:number|null;
   stock: number;
   images: string[]; // Cloudinary URLs
   prescriptionRequired: boolean;
   expiryDate?: Date;
   isAvailable?: boolean;
-  createdBy?: string; // Admin user ID
   createdAt?: Date;
   updatedAt?: Date;
 };
