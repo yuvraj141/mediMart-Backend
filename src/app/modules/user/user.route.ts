@@ -17,6 +17,11 @@ router.post('/create-user',upload.single('file'),(req: Request, res: Response, n
 //getAllUser
 router.get('/',UserControllers.getAllUsers)
 //update userDetails
-router.patch('/:id',UserControllers.updateUser)
+router.patch('/:id',upload.single('file'),(req: Request, res: Response, next: NextFunction) => {
+   
+    req.body = JSON.parse(req.body.data);
+    
+    next();
+  },UserControllers.updateUser)
 
   export const UserRoutes=router
