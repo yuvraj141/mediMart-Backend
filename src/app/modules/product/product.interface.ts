@@ -8,10 +8,12 @@ export type TProduct = {
   price: number;
   discountPrice?:number|null;
   stock: number;
+  discountId?: Types.ObjectId | null;//referencing discountId
   images: string[]; // Cloudinary URLs
   prescriptionRequired: boolean;
   expiryDate?: Date;
   isAvailable?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
+  calculateOfferPrice(): Promise<number | null>;
 };

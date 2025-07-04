@@ -4,7 +4,7 @@ export type TDiscount = {
   discountPercentage: number; 
   startDate: Date;
   endDate: Date;
-  applicableTo: 'all' | 'category' | 'brand' | 'product';
+  applicableTo: 'all' | 'category' | 'brand' ;
   categories?: string[]; // Category IDs
   brands?: string[];     // Brand IDs
   products?: string[];   // Product IDs

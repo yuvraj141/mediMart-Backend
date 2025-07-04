@@ -5,6 +5,8 @@ import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { ProductSearchableFields } from './product.const';
+import { Discount } from '../discount/discount.model';
+
 //createProductIntoDB
 const createProductIntoDB = async (
   files: any[],
@@ -79,28 +81,157 @@ const updateProductIntoDB = async (
 
   return result;
 };
-//getAllProduct
+// Helper to safely get string ID from populated object or ID string
+const getIdString = (field: any): string => {
+  if (!field) return '';
+  if (typeof field === 'string') return field;
+  if (field._id) return field._id.toString();
+  return field.toString();
+};
+
 const getAllProductsFromDB = async (query: Record<string, unknown>) => {
+  const now = new Date();
+
+  // Extract special filters for manual handling
+  const {
+    categories,
+    brands,
+    inStock,
+    ratings,
+    ...restQuery
+  } = query;
+
+  // Build filter object for mongoose find()
+  const filter: Record<string, any> = {};
+
+  // Filter by categories (array or comma separated string)
+  if (categories) {
+    const categoryArray = typeof categories === 'string'
+      ? categories.split(',')
+      : Array.isArray(categories)
+        ? categories
+        : [categories];
+    filter.category = { $in: categoryArray };
+  }
+
+  // Filter by brands (array or comma separated string)
+  if (brands) {
+    const brandArray = typeof brands === 'string'
+      ? brands.split(',')
+      : Array.isArray(brands)
+        ? brands
+        : [brands];
+    filter.brand = { $in: brandArray };
+  }
+
+  // Filter by stock availability
+  if (inStock !== undefined) {
+    filter.stock = inStock === 'true' ? { $gt: 0 } : 0;
+  }
+
+  // Filter by ratings (assuming numeric)
+  if (ratings) {
+    const ratingArray = typeof ratings === 'string'
+      ? ratings.split(',')
+      : Array.isArray(ratings)
+        ? ratings
+        : [ratings];
+    filter.averageRating = { $in: ratingArray.map(Number) };
+  }
+
+  // Build product query with QueryBuilder
   const productQuery = new QueryBuilder(
-    Product.find().populate('brand', 'name').populate('category', 'name'),
-    query
+    Product.find(filter)
+      .populate('brand', 'name')
+      .populate('category', 'name'),
+    restQuery
   )
-    .search(ProductSearchableFields)
+    .search(ProductSearchableFields) // your fields for search, e.g., ['name', 'description']
     .filter()
     .sort()
     .paginate()
     .fields();
 
-  const result = await productQuery.modelQuery;
+  // Execute product query
+  const products = await productQuery.modelQuery.lean();
   const meta = await productQuery.countTotal();
 
-  return { result, meta };
+  if (products.length === 0) return { result: [], meta };
+
+  // Fetch active discounts that apply now
+  const activeDiscounts = await Discount.find({
+    startDate: { $lte: now },
+    endDate: { $gte: now },
+    isActive: true,
+  })
+    .populate('categories', 'name')
+    .populate('brands', 'name')
+    .select(
+      'applicableTo discountPercentage products categories brands startDate endDate isActive'
+    )
+    .lean();
+
+  // Apply best discount per product
+  const discountedProducts = products.map((product: any) => {
+    let maxDiscount = 0;
+
+    const productIdStr = getIdString(product._id);
+    const brandIdStr = getIdString(product.brand);
+    const categoryIdStr = getIdString(product.category);
+
+    for (const discount of activeDiscounts) {
+      const appliesToAll = discount.applicableTo === 'all';
+
+      const appliesToProduct =
+        discount.applicableTo === 'product' &&
+        discount.products?.some((id: any) => id.toString() === productIdStr);
+
+      const appliesToBrand =
+        discount.applicableTo === 'brand' &&
+        discount.brands?.some((brand: any) => getIdString(brand) === brandIdStr);
+
+      const appliesToCategory =
+        discount.applicableTo === 'category' &&
+        discount.categories?.some((category: any) => getIdString(category) === categoryIdStr);
+
+      if (appliesToAll || appliesToProduct || appliesToBrand || appliesToCategory) {
+        maxDiscount = Math.max(maxDiscount, discount.discountPercentage);
+      }
+    }
+
+    if (maxDiscount > 0) {
+      product.discountPrice = Math.round(product.price * (1 - maxDiscount / 100));
+      product.discountPercentage = maxDiscount;
+    } else {
+      product.discountPrice = null;
+      product.discountPercentage = null;
+    }
+
+    return product;
+  });
+
+  return { result: discountedProducts, meta };
 };
-//getSingle
-const getSingleProductFromDB=async(id:string)=>{
-  const result=await Product.findById(id)
-  return result
-}
+
+export { getAllProductsFromDB };
+
+
+
+const getSingleProductFromDB = async (productId: string) => {
+  const product = await Product.findById(productId).populate('brand category');
+
+  if (!product) throw new Error('Product not found');
+  if (!product.isAvailable) throw new Error('Product is not available');
+
+  const discountPrice = await product.calculateOfferPrice();
+
+  const productObj = product.toObject();
+  return {
+    ...productObj,
+    discountPrice,
+  };
+};
+
 export const ProductServices = {
   createProductIntoDB,
   updateProductIntoDB,

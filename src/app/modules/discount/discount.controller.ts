@@ -1,4 +1,3 @@
-
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 
@@ -9,6 +8,7 @@ import sendResponse from '../../utlis/sendResponse';
 export const createDiscount = catchAsync(async (req: Request, res: Response) => {
   const payload = req.body;
 
+  // Create discount and recalc product discounts inside service
   const result = await DiscountServices.createDiscountIntoDB(payload);
 
   sendResponse(res, {
@@ -18,11 +18,12 @@ export const createDiscount = catchAsync(async (req: Request, res: Response) => 
     data: result,
   });
 });
-//updateDiscount
-export const updateDiscount = catchAsync(async (req, res) => {
+
+export const updateDiscount = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const payload = req.body;
 
+  // Update discount and recalc product discounts inside service
   const result = await DiscountServices.updateDiscountIntoDB(id, payload);
 
   sendResponse(res, {
@@ -32,9 +33,9 @@ export const updateDiscount = catchAsync(async (req, res) => {
     data: result,
   });
 });
-//getAllDiscounts
-export const getAllDiscounts = catchAsync(async (req: Request, res: Response) => {
-  const result = await DiscountServices.getAllActiveDiscountsFromDB(req.query);
+
+export const getAllActiveDiscounts = catchAsync(async (req: Request, res: Response) => {
+  const result = await DiscountServices.getAllActiveDiscountProducts(req.query);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -43,6 +44,7 @@ export const getAllDiscounts = catchAsync(async (req: Request, res: Response) =>
     data: result,
   });
 });
+
 export const getSingleDiscount = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -55,6 +57,7 @@ export const getSingleDiscount = catchAsync(async (req: Request, res: Response) 
     data: result,
   });
 });
+
 export const deleteDiscount = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -68,10 +71,10 @@ export const deleteDiscount = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
-export const discountControllers={
-    createDiscount,
-    updateDiscount,
-    getAllDiscounts,
-    getSingleDiscount,
-    deleteDiscount
-}
+export const discountControllers = {
+  createDiscount,
+  updateDiscount,
+  getAllActiveDiscounts,
+  getSingleDiscount,
+  deleteDiscount,
+};

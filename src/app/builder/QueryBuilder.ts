@@ -47,7 +47,7 @@ fields(){
    //field limiting
   //fields :'name,email'from this
   //fields :'name email'to this
-    const fields=(this?.query?.fields as string)?.split(',')?.join(' ') || '_v';
+    const fields=(this?.query?.fields as string)?.split(',')?.join(' ') || '-__v';
   this.modelQuery=this.modelQuery.select(fields);
   return this;
 }

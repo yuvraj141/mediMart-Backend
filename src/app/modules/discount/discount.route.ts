@@ -19,9 +19,9 @@ router.patch(
   discountControllers.updateDiscount
 );
 // Delete discount
-router.delete('/:id', discountControllers.deleteDiscount);
+router.delete('/delete-discount/:id', discountControllers.deleteDiscount);
 // Get all discounts
-router.get('/', discountControllers.getAllDiscounts);
+router.get('/active-discounts', discountControllers.getAllActiveDiscounts);
 
 //  Get single discount
 router.get('/:id', discountControllers.getSingleDiscount);
