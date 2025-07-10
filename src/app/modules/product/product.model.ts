@@ -1,6 +1,6 @@
 import { Schema, model, Types } from 'mongoose';
 import { TProduct } from './product.interface';
-import { Discount } from '../discount/discount.model';
+import { Discount, FlashSale } from '../discount/flashSale.model';
 
 const productSchema = new Schema<TProduct>(
   {
@@ -26,11 +26,6 @@ const productSchema = new Schema<TProduct>(
     price: {
       type: Number,
       required: true,
-    },
-    discountId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Discount',
-      default: null,
     },
     stock: {
       type: Number,
@@ -58,53 +53,13 @@ const productSchema = new Schema<TProduct>(
   }
 );
 
-productSchema.methods.calculateOfferPrice = async function () {
-  const now = new Date();
-
-  // Find all active discounts applicable to this product
-  const discounts = await Discount.find({
-    startDate: { $lte: now },
-    endDate: { $gte: now },
-    isActive: true,
-    $or: [
-      { applicableTo: 'all' },
-      { applicableTo: 'brand', brands: this.brand },
-      { applicableTo: 'category', categories: this.category },
-    ],
-  }).lean();
-
-  if (discounts.length === 0) {
-    // Optionally clear discountId if no active discount
-    if (this.discountId) {
-      this.discountId = null;
-      await this.save();
-    }
-    return null;
+productSchema.methods.calculateOfferPrice=async function(){
+  const flashSale=await FlashSale.findOne({product:this._id})
+  if(flashSale){
+    const discount=(flashSale.discountPercentage/100)*this.price
+    return this.price-discount
   }
-
-  // Find the max discount percentage and the discountId
-  let maxDiscount = 0;
-  let bestDiscountId: Types.ObjectId | null = null;
-
-  for (const disc of discounts) {
-    if (disc.discountPercentage > maxDiscount) {
-      maxDiscount = disc.discountPercentage;
-      bestDiscountId = disc._id;
-    }
-  }
-
-  // Update discountId if changed
-  if (!this.discountId || !this.discountId.equals(bestDiscountId)) {
-    this.discountId = bestDiscountId;
-    await this.save();
-  }
-
-  // Calculate the discounted price
-  if (maxDiscount > 0) {
-    return Math.round(this.price * (1 - maxDiscount / 100));
-  }
-
-  return null;
-};
+  return null
+}
 
 export const Product = model<TProduct>('Product', productSchema);

@@ -6,14 +6,15 @@ export interface TUSer{
     name:string;
     email:string;
     password:string;
-    address:string;
-    imgUrl:string;
-    contactNo:number;
+    address?:string;
+    imgUrl?:string;
+    contactNo?:number;
     role:'admin'|'superAdmin'|'customer';
     status:'active'|'blocked';
     isActive:boolean,
     createdAt:Date;
     updatedAt:Date,
+    passwordChangedAt?: Date;
 }
 
 export interface UserModel extends Model<TUSer>{
@@ -26,6 +27,11 @@ export interface UserModel extends Model<TUSer>{
         // eslint-disable-next-line no-unused-vars
         hashedPassword:string
     ):Promise<boolean>
+    
+   isJWTIssuedBeforePasswordChanged(
+    passwordChangedTimestamp: Date,
+    jwtIssuedTimestamp: number,
+  ): boolean;
 }
 
 export type TUserRole=keyof typeof USER_ROLE

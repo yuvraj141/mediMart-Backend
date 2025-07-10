@@ -23,11 +23,11 @@ name:{
     },
     contactNo:{
         type:Number,
-        required:true,
+        
     },
     address:{
   type:String,
-  required:true
+  
     },
     role:{
         type:String,
@@ -45,7 +45,7 @@ name:{
     },
     imgUrl:{
         type:String,
-        required:true
+        
     }
    
 },{
@@ -77,4 +77,12 @@ userSchema.statics.isUserExistsByEmail=async function(email:string){
 userSchema.statics.isPasswordMatched=async function(plainTextPassword,hashedPassword){
     return await bcrypt.compare(plainTextPassword,hashedPassword)
 }
+userSchema.statics.isJWTIssuedBeforePasswordChanged = function (
+  passwordChangedTimestamp: Date,
+  jwtIssuedTimestamp: number){
+  const passwordChangedTime =
+    new Date(passwordChangedTimestamp).getTime() / 1000;
+    //we are doing it to check if the password is changed after the jwt is issued .this will help to prevent the user from using the old jwt token.hackers cant use the old jwt token to access the system
+  return passwordChangedTime > jwtIssuedTimestamp;
+};
 export const User=model<TUSer,UserModel>('User',userSchema)

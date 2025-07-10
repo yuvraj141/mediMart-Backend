@@ -21,14 +21,14 @@ body:z.object({
 
   address: z.string({
     required_error: 'Address is required',
-  }),
+  }).optional(),
   // imgUrl: z.string().url('Invalid image URL'),
 
   contactNo: z
     .number({
       required_error: 'Contact number is required',
       invalid_type_error: 'Contact number must be a number',
-    }),
+    }).optional(),
 })
 
 

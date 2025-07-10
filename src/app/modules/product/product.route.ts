@@ -29,9 +29,12 @@ router.patch(
   validateRequest(productValidations.updateProductValidationSchema),
   productControllers.updateProduct
 );
-
+//trending products
+router.get('/trending-products',productControllers.getTrendingProducts)
 //getAll
 router.get('/',productControllers.getAllProducts)
 //getSingle
 router.get('/:id',productControllers.getSingleProduct)
+// /delete
+router.delete('/delete/:productId',productControllers.deleteProduct)
   export const ProductRoutes=router

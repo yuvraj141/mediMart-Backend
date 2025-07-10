@@ -6,9 +6,8 @@ export type TProduct = {
   category:  Types.ObjectId; 
   description?: string;
   price: number;
-  discountPrice?:number|null;
+  offerPrice?:number|null;
   stock: number;
-  discountId?: Types.ObjectId | null;//referencing discountId
   images: string[]; // Cloudinary URLs
   prescriptionRequired: boolean;
   expiryDate?: Date;

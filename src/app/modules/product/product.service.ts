@@ -5,7 +5,9 @@ import { Category } from '../category/category.model';
 import { Brand } from '../brand/brand.model';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { ProductSearchableFields } from './product.const';
-import { Discount } from '../discount/discount.model';
+import { Discount, FlashSale } from '../discount/flashSale.model';
+import { Order } from '../order/order.model';
+import AppError from '../../errors/AppError';
 
 //createProductIntoDB
 const createProductIntoDB = async (
@@ -38,13 +40,169 @@ const isCategoryExists = await Category.findById(payload.category);
   const result = await Product.create(payload);
   return result;
 };
+//getAllProductsFromDB
+const getAllProductsFromDB = async (query: Record<string, unknown>) => {
+   const {
+      minPrice,
+      maxPrice,
+      categories,
+      brands,
+      inStock,
+      ratings,
+      ...pQuery
+   } = query;
+
+   // Build the filter object
+   const filter: Record<string, any> = {};
+
+   // Filter by categories
+   if (categories) {
+      const categoryArray = typeof categories === 'string'
+         ? categories.split(',')
+         : Array.isArray(categories)
+            ? categories
+            : [categories];
+      filter.category = { $in: categoryArray };
+   }
+
+
+   // Filter by brands
+   if (brands) {
+      const brandArray = typeof brands === 'string'
+         ? brands.split(',')
+         : Array.isArray(brands)
+            ? brands
+            : [brands]
+      filter.brand = { $in: brandArray };
+   }
+
+   // Filter by in stock/out of stock
+   if (inStock !== undefined) {
+      filter.stock = inStock === 'true' ? { $gt: 0 } : 0;
+   }
+
+   // Filter by ratings
+   if (ratings) {
+      const ratingArray = typeof ratings === 'string'
+         ? ratings.split(',')
+         : Array.isArray(ratings) ? ratings : [ratings];
+      filter.averageRating = { $in: ratingArray.map(Number) };
+   }
+
+   const productQuery = new QueryBuilder(
+      Product.find(filter)
+         .populate('category', 'name')
+         .populate('brand', 'name'),
+      pQuery
+   )
+      .search(['name', 'description'])
+      .filter()
+      .sort()
+      .paginate()
+      .fields()
+      .priceRange(Number(minPrice) || 0, Number(maxPrice) || Infinity);
+
+   const products = await productQuery.modelQuery.lean();
+
+   const meta = await productQuery.countTotal();
+
+   // Get Flash Sale Discounts
+   const productIds = products.map((product: any) => product._id);
+
+   const flashSales = await FlashSale.find({
+      product: { $in: productIds },
+      discountPercentage: { $gt: 0 },
+   }).select('product discountPercentage');
+
+   const flashSaleMap = flashSales.reduce((acc, { product, discountPercentage }) => {
+      //@ts-ignore
+      acc[product.toString()] = discountPercentage;
+      return acc;
+   }, {});
+
+   // Add offer price to products
+   const updatedProducts = products.map((product: any) => {
+      //@ts-ignore
+      const discountPercentage = flashSaleMap[product._id.toString()];
+      if (discountPercentage) {
+         product.offerPrice = product.price * (1 - discountPercentage / 100);
+      } else {
+         product.offerPrice = null;
+      }
+      return product;
+   });
+
+   return {
+      meta,
+      result: updatedProducts,
+   };
+};
+
+//getTrendingProducts
+const getTrendingProducts = async (limit: number) => {
+   const now = new Date();
+   const last30Days = new Date(now.setDate(now.getDate() - 30));
+
+   const trendingProducts = await Order.aggregate([
+      {
+         $match: {
+            createdAt: { $gte: last30Days },
+         },
+      },
+      {
+         $unwind: '$products',
+      },
+      {
+         $group: {
+            _id: '$products.product',
+            orderCount: { $sum: '$products.quantity' },
+         },
+      },
+      {
+         $sort: { orderCount: -1 },
+      },
+      {
+         $limit: limit || 10,
+      },
+      {
+         $lookup: {
+            from: 'products',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'productDetails',
+         },
+      },
+      {
+         $unwind: '$productDetails',
+      },
+      {
+         $project: {
+            _id: 0,
+            productId: '$_id',
+            orderCount: 1,
+            name: '$productDetails.name',
+            price: '$productDetails.price',
+            offer: '$productDetails.offer',
+            imageUrls: '$productDetails.imageUrls',
+         },
+      },
+   ]);
+
+   return trendingProducts;
+};
+
 //update product
 const updateProductIntoDB = async (
   id: string,
   payload: Partial<TProduct>,
   files: Express.Multer.File[]
 ) => {
-
+    const product=await Product.find({
+      _id:id
+    })
+    if(!product){
+      throw new Error('Product not found')
+    }
   // 1. Validate brand/category if needed
   if (payload.brand) {
     const brand = await Brand.findById(payload.brand);
@@ -81,140 +239,6 @@ const updateProductIntoDB = async (
 
   return result;
 };
-// Helper to safely get string ID from populated object or ID string
-const getIdString = (field: any): string => {
-  if (!field) return '';
-  if (typeof field === 'string') return field;
-  if (field._id) return field._id.toString();
-  return field.toString();
-};
-
-const getAllProductsFromDB = async (query: Record<string, unknown>) => {
-  const now = new Date();
-
-  // Extract special filters for manual handling
-  const {
-    categories,
-    brands,
-    inStock,
-    ratings,
-    ...restQuery
-  } = query;
-
-  // Build filter object for mongoose find()
-  const filter: Record<string, any> = {};
-
-  // Filter by categories (array or comma separated string)
-  if (categories) {
-    const categoryArray = typeof categories === 'string'
-      ? categories.split(',')
-      : Array.isArray(categories)
-        ? categories
-        : [categories];
-    filter.category = { $in: categoryArray };
-  }
-
-  // Filter by brands (array or comma separated string)
-  if (brands) {
-    const brandArray = typeof brands === 'string'
-      ? brands.split(',')
-      : Array.isArray(brands)
-        ? brands
-        : [brands];
-    filter.brand = { $in: brandArray };
-  }
-
-  // Filter by stock availability
-  if (inStock !== undefined) {
-    filter.stock = inStock === 'true' ? { $gt: 0 } : 0;
-  }
-
-  // Filter by ratings (assuming numeric)
-  if (ratings) {
-    const ratingArray = typeof ratings === 'string'
-      ? ratings.split(',')
-      : Array.isArray(ratings)
-        ? ratings
-        : [ratings];
-    filter.averageRating = { $in: ratingArray.map(Number) };
-  }
-
-  // Build product query with QueryBuilder
-  const productQuery = new QueryBuilder(
-    Product.find(filter)
-      .populate('brand', 'name')
-      .populate('category', 'name'),
-    restQuery
-  )
-    .search(ProductSearchableFields) // your fields for search, e.g., ['name', 'description']
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  // Execute product query
-  const products = await productQuery.modelQuery.lean();
-  const meta = await productQuery.countTotal();
-
-  if (products.length === 0) return { result: [], meta };
-
-  // Fetch active discounts that apply now
-  const activeDiscounts = await Discount.find({
-    startDate: { $lte: now },
-    endDate: { $gte: now },
-    isActive: true,
-  })
-    .populate('categories', 'name')
-    .populate('brands', 'name')
-    .select(
-      'applicableTo discountPercentage products categories brands startDate endDate isActive'
-    )
-    .lean();
-
-  // Apply best discount per product
-  const discountedProducts = products.map((product: any) => {
-    let maxDiscount = 0;
-
-    const productIdStr = getIdString(product._id);
-    const brandIdStr = getIdString(product.brand);
-    const categoryIdStr = getIdString(product.category);
-
-    for (const discount of activeDiscounts) {
-      const appliesToAll = discount.applicableTo === 'all';
-
-      const appliesToProduct =
-        discount.applicableTo === 'product' &&
-        discount.products?.some((id: any) => id.toString() === productIdStr);
-
-      const appliesToBrand =
-        discount.applicableTo === 'brand' &&
-        discount.brands?.some((brand: any) => getIdString(brand) === brandIdStr);
-
-      const appliesToCategory =
-        discount.applicableTo === 'category' &&
-        discount.categories?.some((category: any) => getIdString(category) === categoryIdStr);
-
-      if (appliesToAll || appliesToProduct || appliesToBrand || appliesToCategory) {
-        maxDiscount = Math.max(maxDiscount, discount.discountPercentage);
-      }
-    }
-
-    if (maxDiscount > 0) {
-      product.discountPrice = Math.round(product.price * (1 - maxDiscount / 100));
-      product.discountPercentage = maxDiscount;
-    } else {
-      product.discountPrice = null;
-      product.discountPercentage = null;
-    }
-
-    return product;
-  });
-
-  return { result: discountedProducts, meta };
-};
-
-export { getAllProductsFromDB };
-
 
 
 const getSingleProductFromDB = async (productId: string) => {
@@ -223,18 +247,22 @@ const getSingleProductFromDB = async (productId: string) => {
   if (!product) throw new Error('Product not found');
   if (!product.isAvailable) throw new Error('Product is not available');
 
-  const discountPrice = await product.calculateOfferPrice();
-
+ const offerPrice = await product.calculateOfferPrice();
   const productObj = product.toObject();
   return {
     ...productObj,
-    discountPrice,
+    offerPrice,
   };
 };
-
+//delete product
+const deleteProduct=async(productId:string)=>{
+  return await Product.findByIdAndDelete(productId)
+}
 export const ProductServices = {
   createProductIntoDB,
   updateProductIntoDB,
   getAllProductsFromDB,
-  getSingleProductFromDB
+  getSingleProductFromDB,
+  getTrendingProducts,
+  deleteProduct
 };

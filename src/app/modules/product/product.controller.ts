@@ -42,13 +42,14 @@ const getAllProducts=catchAsync(async(req,res)=>{
         statusCode:httpStatus.OK,
         success:true,
         message:"products  retrieved successfully",
-        data:result
+        data:result.result,
+        meta:result.meta
     })
 })
 //getSingleProduct
 const getSingleProduct=catchAsync(async(req,res)=>{
-  const {id}=req.params
-  const result=await ProductServices.getSingleProductFromDB(id)
+  const {productId}=req.params
+  const result=await ProductServices.getSingleProductFromDB(productId)
 
    sendResponse(res,{
         statusCode:httpStatus.OK,
@@ -57,9 +58,37 @@ const getSingleProduct=catchAsync(async(req,res)=>{
         data:result
     })
 })
+//getTrendingProducts
+const getTrendingProducts = catchAsync(async (req, res) => {
+  const { limit } = req.query;
+  const result = await ProductServices.getTrendingProducts(Number(limit));
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Trending Products are retrieved successfully",
+    data: result,
+  });
+});
+// hard delete
+const deleteProduct = catchAsync(async (req, res) => {
+  const {productId} = req.params;
+
+  const result = await ProductServices.deleteProduct(
+    productId );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Product deleted successfully",
+    data: result,
+  });
+});
 export const productControllers={
     createProduct,
     updateProduct,
     getAllProducts,
-    getSingleProduct
+    getSingleProduct,
+    getTrendingProducts,
+    deleteProduct
 }

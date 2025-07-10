@@ -9,7 +9,7 @@ const result=await UserServices.registerUserIntoDB(req.file,req.body)
    sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: 'Student is created successfully',
+    message: 'User account is created successfully',
     
     data: result,
   });
